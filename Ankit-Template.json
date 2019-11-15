@@ -1,0 +1,123 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Transform": "AWS::Serverless-2016-10-31",
+    "Description": "To add",
+    "Resources": {
+        "IoTCertificate": {
+            "Type": "AWS::IoT::Certificate",
+            "Properties": {
+                "CertificateSigningRequest": "-----BEGIN CERTIFICATE REQUEST-----\nMIICijCCAXICAQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUx\nITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDCCASIwDQYJKoZIhvcN\nAQEBBQADggEPADCCAQoCggEBALhVRsmisCaindxEJeVNhvun0XQ3kccC97uKrbr1\nEgmsiGN9o5P+X5H94D/rNJjvd4oYJ3JGhfgV/XpIUi/Cuwh2cDdXxwBHAlNU+g2K\ngYElXth700L1dklgMuopDyrPhdu1W2KrqEBzBVe8OS5Op17hoi2Lm8KOSpqrGjIf\nE3VZ/3jQMbQIN7YURC7NcobzAAwUr9+1oCLAs06XaBT8HpXACcJue6l8EGfklywF\nYY5VEqFmeKvMUJQLlntNHZc+Qx8Ck4MW1zWSUSiAmRpVxf9hxClK+8mpUrQoUZ2P\nYqxH1kCxpSCSeUAhjRkKmsgh5bxxhYA30WcMD8Eq6qi8NKcCAwEAAaAAMA0GCSqG\nSIb3DQEBCwUAA4IBAQABSAPPQMQvSGVoOhJ0y3nGCusVC7sKJ3Goy0pHiRtJyebq\nr3q1+rbkLtYmhbYzDUrqzTu6ToB/X5YBTtwXc2TcnszMxp0Hm82/BCx5End+p9FT\nFDvTU4eSZGUbTcrsauCFHtTAIeoSnOVlnUbQbIkdR6+IgSw/F49+E8YLnutr2Krm\njMhVplF0TNojnWlm0OqI2drhzDf1GNXdjpT1hnmxt/+dOEX+POlpkcdvrFqC5zZB\nJNcw26zEbybzk4i/yzsPg5jXtGt4MPS3TqzPJUFMT2xoGS/1QorIFo/SN52lWmyx\njyNhDY7kq/OGuVfFZkORDoyzs2WSvmLhMeD3NgcK\n-----END CERTIFICATE REQUEST-----\n",
+                "Status": "ACTIVE"
+            }
+        },
+        "IoTPolicy": {
+            "Type": "AWS::IoT::Policy",
+            "Properties": {
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "ManageConnections",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iot:*"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "IoTThing": {
+            "Type": "AWS::IoT::Thing",
+            "Properties": {
+                "ThingName": "demo-thing"
+            }
+        },
+        "IoTPolicyPrincipalAttachment": {
+            "Type": "AWS::IoT::PolicyPrincipalAttachment",
+            "Properties": {
+                "PolicyName": {
+                    "Ref": "IoTPolicy"
+                },
+                "Principal": {
+                    "Fn::GetAtt": [
+                        "IoTCertificate",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "IoTThingPrincipalAttachment": {
+            "Type": "AWS::IoT::ThingPrincipalAttachment",
+            "Properties": {
+                "Principal": {
+                    "Fn::GetAtt": [
+                        "IoTCertificate",
+                        "Arn"
+                    ]
+                },
+                "ThingName": {
+                    "Ref": "IoTThing"
+                }
+            }
+        },
+        "IoTTopicRule": {
+            "Type": "AWS::IoT::TopicRule",
+            "Properties": {
+                "RuleName": "SoilHumidityTestRule",
+                "TopicRulePayload": {
+                    "RuleDisabled": "false",
+                    "Sql": "Select temp FROM 'iot/soil/humidity' WHERE humidity > 60",
+                    "Actions": [
+                        {
+                            "S3": {
+                                "BucketName": {
+                                    "Ref": "RuleFilterBucket"
+                                },
+                                "RoleArn": {
+                                    "Fn::GetAtt": [
+                                        "IoTRuleRole",
+                                        "Arn"
+                                    ]
+                                },
+                                "Key": "filteredData.txt"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "RuleFilterBucket": {
+            "Type": "AWS::S3::Bucket"
+        },
+        "IoTRuleRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "iot.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "IoTCertificate": {
+            "Description": "CertificateArn",
+            "Value": {
+                "Fn::GetAtt": [
+                    "IoTCertificate",
+                    "Arn"
+                ]
+            }
+        }
+    }
+}

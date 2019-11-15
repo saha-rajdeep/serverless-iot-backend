@@ -1,0 +1,179 @@
+{
+  "Description" : "This is a sample template for lambda-backed custom resource. Runtime for Lambda function is python",
+  "Transform": "AWS::Serverless-2016-10-31",
+  "Parameters" : {
+    "SNSEmail" : {
+      "Type" : "String",
+      "Default" : "youremail@email.com"
+    }
+  },
+  "Resources":{
+    "IoTCertificate": {
+            "Type": "AWS::IoT::Certificate",
+            "Properties": {
+                "CertificateSigningRequest": "-----BEGIN CERTIFICATE REQUEST-----\nMIICijCCAXICAQAwRTELMAkGA1UEBhMCQVUxEzARBgNVBAgMClNvbWUtU3RhdGUx\nITAfBgNVBAoMGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZDCCASIwDQYJKoZIhvcN\nAQEBBQADggEPADCCAQoCggEBALhVRsmisCaindxEJeVNhvun0XQ3kccC97uKrbr1\nEgmsiGN9o5P+X5H94D/rNJjvd4oYJ3JGhfgV/XpIUi/Cuwh2cDdXxwBHAlNU+g2K\ngYElXth700L1dklgMuopDyrPhdu1W2KrqEBzBVe8OS5Op17hoi2Lm8KOSpqrGjIf\nE3VZ/3jQMbQIN7YURC7NcobzAAwUr9+1oCLAs06XaBT8HpXACcJue6l8EGfklywF\nYY5VEqFmeKvMUJQLlntNHZc+Qx8Ck4MW1zWSUSiAmRpVxf9hxClK+8mpUrQoUZ2P\nYqxH1kCxpSCSeUAhjRkKmsgh5bxxhYA30WcMD8Eq6qi8NKcCAwEAAaAAMA0GCSqG\nSIb3DQEBCwUAA4IBAQABSAPPQMQvSGVoOhJ0y3nGCusVC7sKJ3Goy0pHiRtJyebq\nr3q1+rbkLtYmhbYzDUrqzTu6ToB/X5YBTtwXc2TcnszMxp0Hm82/BCx5End+p9FT\nFDvTU4eSZGUbTcrsauCFHtTAIeoSnOVlnUbQbIkdR6+IgSw/F49+E8YLnutr2Krm\njMhVplF0TNojnWlm0OqI2drhzDf1GNXdjpT1hnmxt/+dOEX+POlpkcdvrFqC5zZB\nJNcw26zEbybzk4i/yzsPg5jXtGt4MPS3TqzPJUFMT2xoGS/1QorIFo/SN52lWmyx\njyNhDY7kq/OGuVfFZkORDoyzs2WSvmLhMeD3NgcK\n-----END CERTIFICATE REQUEST-----\n",
+                "Status": "ACTIVE"
+            }
+    },
+    "IoTPolicy": {
+            "Type": "AWS::IoT::Policy",
+            "Properties": {
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "ManageConnections",
+                            "Effect": "Allow",
+                            "Action": [
+                                "iot:*"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                }
+            }
+        },
+        "IoTThing": {
+            "Type": "AWS::IoT::Thing",
+            "Properties": {
+                "ThingName": "demo-thing"
+            }
+        },
+        "IoTPolicyPrincipalAttachment": {
+            "Type": "AWS::IoT::PolicyPrincipalAttachment",
+            "Properties": {
+                "PolicyName": {
+                    "Ref": "IoTPolicy"
+                },
+                "Principal": {
+                    "Fn::GetAtt": [
+                        "IoTCertificate",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "IoTThingPrincipalAttachment": {
+            "Type": "AWS::IoT::ThingPrincipalAttachment",
+            "Properties": {
+                "Principal": {
+                    "Fn::GetAtt": [
+                        "IoTCertificate",
+                        "Arn"
+                    ]
+                },
+                "ThingName": {
+                    "Ref": "IoTThing"
+                }
+            }
+        },
+    "AlertSNSTopic" : {
+      "Type" : "AWS::SNS::Topic",
+      "Properties" : {
+        "Subscription" :  [{
+          "Endpoint" : { "Ref" : "SNSEmail"},
+          "Protocol" : "email"
+        }]
+      }
+    },
+    "IoTFunction" : {
+      "Type" : "AWS::Serverless::Function",
+      "DependsOn" : "AlertSNSTopic",
+      "Properties" : {
+        "Handler" : "lambda_function.lambda_handler",
+        "Role" : {"Fn::GetAtt" : ["TestLambdaExecutionRole", "Arn"]},
+        "CodeUri" : "s3://raj-saha-website-code/lambda_function.zip",
+        "Timeout" : 10,
+        "Runtime" : "python3.7",
+        "Events" : {
+          "SoilHumidityTestRule":{
+            "Type": "IoTRule",
+            "Properties":
+               {"Sql": "Select temp FROM 'iot/soil/humidity' WHERE humidity > 60"
+               }
+          }
+        },
+        "Environment" : {
+          "Variables" : {"bad_image_sns":{"Ref": "AlertSNSTopic"}
+                        }
+        }
+      }
+    },
+    "TestLambdaExecutionRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": [
+                  "lambda.amazonaws.com"
+                ]
+              },
+              "Action": [
+                "sts:AssumeRole"
+              ]
+            }
+          ]
+        },
+        "Path": "/",
+        "Policies": [
+          {
+            "PolicyName": "cwlogs",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "sns:*",
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "iot:*",
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "s3:*",
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "logs:CreateLogGroup",
+                  "Resource": { "Fn::Join" : [":", ["arn:aws:logs", { "Ref" : "AWS::Region" }, { "Ref" : "AWS::AccountId" }, "*" ]] }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": [
+                    { "Fn::Join" : [":", ["arn:aws:logs", { "Ref" : "AWS::Region" }, { "Ref" : "AWS::AccountId" }, "log-group", "/aws/lambda/*", "*" ]] }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  },
+  "Outputs" : {
+    "AlertSNSTopic" : {
+      "Value" : { "Ref":"AlertSNSTopic"}
+    },
+    "IoTCertificate": {
+            "Description": "CertificateArn",
+            "Value": {
+                "Fn::GetAtt": [
+                    "IoTCertificate",
+                    "Arn"
+                ]
+            }
+        }
+  }
+}
